@@ -1,0 +1,81 @@
+# Brain-JEPA pretraining on ABCD time-series data.
+# Data: ts_20.npy of shape (11156, 100, 1500), float32.
+# Splits are built deterministically at the src_subject_id level so all events
+# (baseline + 2-year follow-up) of one subject end up in the same split.
+
+data:
+  batch_size: 16
+  # 100 ROIs x 1500 timepoints, no temporal downsampling.
+  crop_size:
+  - 100
+  - 1500
+  num_workers: 8
+  pin_mem: true
+
+  ts_path: /data/benjamin_project/diffusion_models/time_series_20_min/ts_20.npy
+  metadata_path: /data/benjamin_project/diffusion_models/time_series_20_min/metadata.csv
+  split: train          # train | val | test
+  val_frac: 0.1
+  test_frac: 0.1
+  split_seed: 0
+  subject_col: src_subject_id
+
+  # 100-ROI brain gradient. Generate with:
+  #   python scripts/compute_gradient.py \
+  #       --data /data/benjamin_project/diffusion_models/time_series_20_min/ts_20.npy \
+  #       --metadata /data/benjamin_project/diffusion_models/time_series_20_min/metadata.csv \
+  #       --split train --out data/gradient_mapping_100.csv --n_components 30
+  gradient_csv_path: data/gradient_mapping_100.csv
+
+logging:
+  folder: logs/abcd_vitb_ep300
+  write_tag: jepa
+
+mask:
+  allow_overlap: false
+  # 1500 / 50 = 30 temporal patches per ROI.
+  patch_size: 50
+  min_keep: 4
+  enc_mask_scale:
+  - 0.84
+  - 1
+  pred_mask_R_scale:
+  - 0.45
+  - 0.6
+  pred_mask_T_roi_scale:
+  - 0.2
+  - 0.6
+  pred_mask_R_roi_scale:
+  - 0.15
+  - 0.3
+  pred_mask_T_scale:
+  - 0.0
+  - 0.4
+
+meta:
+  load_checkpoint: false
+  model_name: vit_base
+  pred_depth: 6
+  pred_emb_dim: 384
+  read_checkpoint: null
+  use_bfloat16: true
+  accumulation_steps: 8
+  attn_mode: flash_attn
+  add_w: mapping
+  # ABCD comes with native 1500 timepoints; we keep all of them.
+  downsample: false
+  mask_mode: 'roi_mask'
+  use_standatdization: false
+
+optimization:
+  ema:
+  - 0.996
+  - 1.0
+  epochs: 300
+  final_lr: 1.0e-06
+  final_weight_decay: 0.4
+  ipe_scale: 1.0
+  lr: 0.001
+  start_lr: 0.00005
+  warmup: 40
+  weight_decay: 0.04
